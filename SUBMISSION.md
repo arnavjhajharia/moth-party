@@ -28,6 +28,15 @@ Empty seats are flown by CPU moths (sleepy, buzzing or feral), so you can play a
 up to four. Every moth plays its own scale on a harp as it collects sparks, so a good run sounds like a rising melody.
 The notes are arranged live in code and played on recorded CC0 samples.
 
+## Why it fits "Arcade & Party" (paste after the description if there is room)
+These follow the category page's three judging headings (chromaawards.com/prizes/game-arcade-party, checked 2026-11-03):
+- Easy to pick up: one button per player. Hold to fly, release to spin. No menus are needed to start, and up to 4 people
+  share one keyboard or one phone. Empty seats get CPU moths, so a solo judge still gets a full 4-moth round.
+- Replay & fun: rounds last 45 seconds and the first moth to 3 rounds wins. You can steal sparks by ramming a rival,
+  and the lamp's flares come faster as the round goes on. Rematch is one tap.
+- Craft: bumps add screen shake, a spark burst and a short hit-stop. Every moth plays its own harp scale as it
+  collects, so a good run sounds like a rising melody. Recorded CC0 samples, canvas art drawn in code, and a mute button.
+
 ## Tools / AI disclosure (paste honestly)
 The code was written with an AI coding assistant (Anthropic Claude), directed by the entrant. The art is drawn in code
 on a canvas. Music and sound effects are arranged at runtime in WebAudio from recorded CC0 samples: VSCO 2 Community
