@@ -1,5 +1,7 @@
 # Moth Party
 
+**Play:** [Playgama](https://playgama.ai/play/nuxkra3i4xiowc) · [GitHub Pages](https://arnavjhajharia.github.io/moth-party/) · [devlog: one button per player](https://dev.to/bharat_ankh_920bf0864220a/one-button-per-player-the-physics-blame-rules-and-cpu-behind-a-4-player-moth-party-game-49j8)
+
 A one-button party game for 1-4 players on one keyboard or one phone. Chroma Awards S2, Game > Arcade & Party.
 
 Play: https://arnavjhajharia.github.io/moth-party/
