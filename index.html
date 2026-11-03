@@ -50,6 +50,10 @@
   .board b { display: block; font-size: 22px; }
   .foot { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 10.5px; color: rgba(163,156,179,.6); pointer-events: none; }
   body.playing .foot { display: none; }
+  .cbtn { position: fixed; bottom: 10px; z-index: 6; height: 44px; min-width: 44px; border-radius: 22px; border: 1px solid rgba(255,255,255,.22);
+    background: rgba(10,8,20,.45); color: #fff; font: 600 15px/42px system-ui, sans-serif; padding: 0 12px; cursor: pointer; opacity: .75; -webkit-tap-highlight-color: transparent; }
+  .cbtn:hover { opacity: 1; }
+  #snd { left: calc(50% - 22px); padding: 0; width: 44px; } body.playing #snd { left: calc(50% - 60px); } #mlobby { left: calc(50% - 8px); display: none; font-size: 13px; } body.playing #mlobby { display: block; }
   /* first visit: one big button, multiplayer seats and CPU options one tap away */
   body.first #seats, body.first .opts, body.first #ladline, body.first .help { display: none; }
   body.first #start { font-size: 26px; padding: 14px 56px; }
@@ -81,6 +85,7 @@
   </div>
 </div>
 
+<button id="snd" class="cbtn" type="button" aria-label="Mute">🔊</button><button id="mlobby" class="cbtn" type="button" aria-label="Quit to lobby">✕ lobby</button>
 <div class="overlay hidden" id="over">
   <div class="panel">
     <div class="champ" id="champ"></div>
@@ -121,7 +126,7 @@ const ROOTS = [62, 65, 69, 67]; // each moth has its own register
 function initAudio() {
   if (ac) return;
   ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
-  master = ac.createGain(); master.gain.value = 0.7;
+  master = ac.createGain(); master.gain.value = store.get('muted', false) ? 0 : 0.7;
   const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 5;
   master.connect(comp); comp.connect(ac.destination); masterOut = comp;
   sfx = ac.createGain(); sfx.gain.value = 0.9; sfx.connect(master);
@@ -256,6 +261,13 @@ function toLobby() {
   $('over').classList.add('hidden'); $('lobby').classList.remove('hidden'); document.body.classList.remove('playing'); renderSeats();
 }
 $('start').onclick = playAgain; $('again').onclick = playAgain; $('tolobby').onclick = toLobby;
+// on-screen sound toggle + way back to the lobby (phones have no Esc). Mute = master gain.
+function setMuted(on) { store.set('muted', on); $('snd').textContent = on ? '🔇' : '🔊'; $('snd').setAttribute('aria-pressed', String(on)); if (master) master.gain.setTargetAtTime(on ? 0 : 0.7, ac.currentTime, 0.02); }
+for (const id of ['snd', 'mlobby']) for (const t of ['pointerdown', 'touchstart', 'mousedown']) $(id).addEventListener(t, e => e.stopPropagation());
+$('snd').onclick = e => { e.stopPropagation(); e.currentTarget.blur(); setMuted(!store.get('muted', false)); };
+$('mlobby').onclick = e => { e.stopPropagation(); e.currentTarget.blur(); toLobby(); };
+setMuted(store.get('muted', false));
+setTimeout(() => { if ($('pq')) $('mlobby').remove(); }); // portal builds already add their own ✕ lobby chip
 // first visit (never finished a match, no ?demo): only "Play ▸"; a tap on empty lobby space also starts a solo match
 if (!store.get('played', false) && !params.has('demo') && !params.has('selftest')) {
   document.body.classList.add('first'); $('start').textContent = 'Play ▸';
