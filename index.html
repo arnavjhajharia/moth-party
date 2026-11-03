@@ -140,11 +140,14 @@ const INST = {
   glock: [['G5', 79.08], ['C6', 84.12], ['G6', 91.12], ['C7', 96.15], ['G7', 103.16], ['C8', 108.24]],
 };
 const SMP = {}; let smpReady = null;
+const SMP_NAMES = ['kick', 'tamb', 'claves', 'flap', 'bump', 'wall', 'flare', 'burn', 'warn'];
+for (const k in INST) for (const [n] of INST[k]) SMP_NAMES.push(k + '_' + n);
+// prefetch the raw bytes at page load (no AudioContext/gesture needed); decode on the first gesture
+const RAW = {};
+for (const n of SMP_NAMES) RAW[n] = fetch('audio/' + n + '.mp3').then(r => r.arrayBuffer());
 function loadSamples() {
   if (smpReady) return smpReady;
-  const names = ['kick', 'tamb', 'claves', 'flap', 'bump', 'wall', 'flare', 'burn', 'warn'];
-  for (const k in INST) for (const [n] of INST[k]) names.push(k + '_' + n);
-  smpReady = Promise.all(names.map(n => fetch('audio/' + n + '.mp3').then(r => r.arrayBuffer())
+  smpReady = Promise.all(SMP_NAMES.map(n => RAW[n]
     .then(b => new Promise((ok, no) => ac.decodeAudioData(b, ok, no))).then(buf => { SMP[n] = buf; })
     .catch(e => console.warn('sample', n, e))));
   return smpReady;
