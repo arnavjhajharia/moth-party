@@ -62,8 +62,9 @@
     <div class="seats" id="seats"></div>
     <div class="row"><button class="go" id="start">Fly ▸</button></div>
     <div class="opts row">CPU moths:
-      <button class="chip" data-skill="0.45">sleepy</button><button class="chip" data-skill="0.7">buzzing</button><button class="chip" data-skill="0.92">feral</button>
+      <button class="chip" data-skill="ladder" id="ladchip">ladder</button><button class="chip" data-skill="0.45">sleepy</button><button class="chip" data-skill="0.7">buzzing</button><button class="chip" data-skill="0.92">feral</button>
     </div>
+    <p class="tag" id="ladline" style="margin-top:8px"></p>
     <p class="help">
       Press your key (or tap your seat) to join. Empty seats are flown by CPU moths, so you can play solo.<br>
       <b>Hold</b> to fly straight · <b>let go</b> to spin and aim.<br>
@@ -175,7 +176,15 @@ function sfxFor(e) {
 
 // ---------- state ----------
 let humans = [false, false, false, false];
-let skill = store.get('skill', 0.7);
+let skill = store.get('skill', 'ladder');
+// Lamp Ladder: solo progression. Win a match with exactly one human to climb a rung; CPUs get sharper each rung.
+const LADDER = [['Porch light', 0.4], ['Street lamp', 0.52], ['Campfire', 0.62], ['Lighthouse', 0.72], ['Bonfire', 0.8], ['Full moon', 0.88], ['The sun', 0.96]];
+let rung = Math.min(LADDER.length, store.get('rung', 0));
+function cpuSkillNow() { return skill === 'ladder' ? LADDER[Math.min(rung, LADDER.length - 1)][1] : skill; }
+function ladderText() {
+  if (rung >= LADDER.length) return 'Lamp Ladder complete: you out-shone the sun ✦ (CPUs stay at full strength)';
+  return `Lamp Ladder · rung ${rung + 1}/${LADDER.length}: ${LADDER[rung][0]} · win a solo match to climb`;
+}
 let game = MothSim.newGame({ humans: [false, false, false, false], cpuSkill: 0.8 });
 let attract = true; // an all-CPU match plays silently behind the lobby
 const buttons = [0, 0, 0, 0];
@@ -193,16 +202,20 @@ function renderSeats() {
     b.onclick = () => { humans[i] = !humans[i]; initAudio(); ac.resume(); if (humans[i]) joinChirp(i); renderSeats(); };
     box.appendChild(b);
   }
-  document.querySelectorAll('[data-skill]').forEach(b => b.classList.toggle('sel', +b.dataset.skill === skill));
+  document.querySelectorAll('[data-skill]').forEach(b => b.classList.toggle('sel', String(b.dataset.skill) === String(skill)));
+  $('ladchip').textContent = rung >= LADDER.length ? 'ladder ✦' : 'ladder ' + (rung + 1) + '/' + LADDER.length;
+  $('ladline').textContent = skill === 'ladder' ? ladderText() : '';
 }
 function joinChirp(i) { if (!ac) return; const t = ac.currentTime + 0.01; [0, 4, 7].forEach((d, k) => tone(sfx, 'triangle', hz(ROOTS[i] + 12 + d), t + k * 0.06, 0.003, 0.18, 0.25)); }
-document.querySelectorAll('[data-skill]').forEach(b => b.onclick = () => { skill = +b.dataset.skill; store.set('skill', skill); renderSeats(); });
+document.querySelectorAll('[data-skill]').forEach(b => b.onclick = () => { skill = b.dataset.skill === 'ladder' ? 'ladder' : +b.dataset.skill; store.set('skill', skill); renderSeats(); });
 
 async function startMatch() {
   initAudio(); try { await ac.resume(); } catch {}
   attract = false; matchesPlayed++;
+  if (!params.has('demo') && !humans.some(Boolean)) { humans[0] = true; renderSeats(); } // pressing Fly alone = solo as Rose, never a spectator match
   if (window.Portal) { Portal.setAudio(ac); Portal.start(); }
-  game = MothSim.newGame({ humans: humans.slice(), cpuSkill: skill });
+  game = MothSim.newGame({ humans: humans.slice(), cpuSkill: cpuSkillNow() });
+  game.ladder = skill === 'ladder' && humans.filter(Boolean).length === 1 && !params.has('demo');
   parts.length = 0; pops.length = 0; banner = null; clearTimeout(bannerTimer);
   $('lobby').classList.add('hidden'); $('over').classList.add('hidden');
   document.body.classList.add('playing');
@@ -235,15 +248,18 @@ addEventListener('keydown', e => {
   }
   if (!$('over').classList.contains('hidden')) { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); playAgain(); } if (e.code === 'Escape') toLobby(); return; }
   if (e.code === 'Escape') { toLobby(); return; }
-  if (i != null) { buttons[i] = 1; e.preventDefault(); }
+  const j = i ?? (e.code === 'Space' && soloSeat() >= 0 ? soloSeat() : null); // solo: Space works too
+  if (j != null) { buttons[j] = 1; e.preventDefault(); }
 });
-addEventListener('keyup', e => { const i = KEYCODES[e.code]; if (i != null) buttons[i] = 0; });
+addEventListener('keyup', e => { const i = KEYCODES[e.code] ?? (e.code === 'Space' && soloSeat() >= 0 ? soloSeat() : null); if (i != null) buttons[i] = 0; });
 addEventListener('blur', () => buttons.fill(0));
 // touch: each corner of the screen is a seat's button (hold anywhere in your quadrant)
 const ptrSeat = new Map();
+function soloSeat() { return game && game.humans && game.humans.filter(Boolean).length === 1 && !attract ? game.humans.indexOf(true) : -1; }
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); if (ac) ac.resume();
-  const i = (e.clientY > innerHeight / 2 ? 2 : 0) + (e.clientX > innerWidth / 2 ? 1 : 0);
+  const solo = soloSeat(); // one human: the whole screen is their button
+  const i = solo >= 0 ? solo : (e.clientY > innerHeight / 2 ? 2 : 0) + (e.clientX > innerWidth / 2 ? 1 : 0);
   ptrSeat.set(e.pointerId, i); buttons[i] = 1;
 });
 const ptrUp = e => { const i = ptrSeat.get(e.pointerId); if (i != null) { ptrSeat.delete(e.pointerId); if (![...ptrSeat.values()].includes(i)) buttons[i] = 0; } };
@@ -276,7 +292,13 @@ function handleEvents() {
 function showChampion() {
   const w = game.matchWinner;
   $('champ').textContent = NAMES[w] + ' wins!'; $('champ').style.color = COLORS[w];
-  $('champsub').textContent = (game.humans[w] ? 'the brightest moth at the party' : 'a CPU moth stole the lamp. rematch?') + ` · ${game.round} rounds`;
+  let sub = (game.humans[w] ? 'the brightest moth at the party' : 'a CPU moth stole the lamp. rematch?') + ` · ${game.round} rounds`;
+  if (game.ladder && rung < LADDER.length) {
+    if (game.humans[w]) { rung++; store.set('rung', rung);
+      sub = rung >= LADDER.length ? 'you out-shone the sun. Lamp Ladder complete ✦' : `rung up! next lamp: ${LADDER[rung][0]} (${rung + 1}/${LADDER.length})`; }
+    else sub = `still at the ${LADDER[rung][0]} (${rung + 1}/${LADDER.length}). rematch?`;
+  }
+  $('champsub').textContent = sub;
   $('board').innerHTML = game.moths.map((m, i) => `<div style="border-color:${i === w ? COLORS[i] : ''}"><b style="color:${COLORS[i]}">${game.wins[i]}</b>${NAMES[i]}${game.humans[i] ? ' · you' : ''}</div>`).join('');
   $('over').classList.remove('hidden'); document.body.classList.remove('playing');
   if (window.Portal) { Portal.stop(); if (game.humans[w]) Portal.happy(); }
@@ -426,7 +448,7 @@ function hud(now) {
     cx.fillText(`${NAMES[i]} ${m.carry}`, x, y + 18);
     cx.font = "11px 'Space Mono', monospace"; cx.fillStyle = 'rgba(251,243,228,.6)';
     const pips = '●'.repeat(game.wins[i]) + '○'.repeat(Math.max(0, C.WIN_ROUNDS - game.wins[i]));
-    cx.fillText(`${pips}  ${game.humans[i] ? (matchMedia('(pointer: coarse)').matches ? 'hold this corner' : 'key ' + KEYS[i]) : 'cpu'}`, x, y + 34);
+    cx.fillText(`${pips}  ${game.humans[i] ? (matchMedia('(pointer: coarse)').matches ? (soloSeat() >= 0 ? 'hold anywhere' : 'hold this corner') : 'key ' + KEYS[i] + (soloSeat() >= 0 ? ' / space' : '')) : 'cpu'}`, x, y + 34);
   }
   // timer + round
   cx.textAlign = 'center';
