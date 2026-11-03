@@ -25,13 +25,14 @@ flares come faster as the round goes on. The moth carrying the most sparks after
 first to three rounds wins the party.
 
 Empty seats are flown by CPU moths (sleepy, buzzing or feral), so you can play alone or with any number of friends
-up to four. All sound is synthesized live: every moth plays its own scale as it collects sparks, so a good run sounds
-like a rising melody.
+up to four. Every moth plays its own scale on a harp as it collects sparks, so a good run sounds like a rising melody.
+The notes are arranged live in code and played on recorded CC0 samples.
 
 ## Tools / AI disclosure (paste honestly)
 The code was written with an AI coding assistant (Anthropic Claude), directed by the entrant. The art is drawn in code
-on a canvas, and the music and sound effects are synthesized at runtime with WebAudio. No generative image, video or
-audio models were used, and there are no third-party assets.
+on a canvas. Music and sound effects are arranged at runtime in WebAudio from recorded CC0 samples: VSCO 2 Community
+Edition instruments (harp, violins, glockenspiel, percussion) and Kenney sound packs. No generative image, video or
+audio models were used.
 
 ## Owner steps (about 4 min)
 1. Sign in at https://submit.chromaawards.com/ and open a new Game-division submission.

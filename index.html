@@ -107,8 +107,8 @@ addEventListener('resize', resize); resize();
 const store = { get(k, d) { try { const v = localStorage.getItem('moth:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('moth:' + k, JSON.stringify(v)); } catch {} } };
 
-// ---------- audio (all synthesized) ----------
-let ac = null, master, padBus, sfx, noiseBuf, masterOut, recorder = null;
+// ---------- audio: recorded CC0 samples (VSCO 2 CE instruments + Kenney SFX, see audio/LICENSE-*.txt), arranged live ----------
+let ac = null, master, padBus, sfx, masterOut, recorder = null;
 const PENTA = [0, 2, 4, 7, 9];
 const ROOTS = [62, 65, 69, 67]; // each moth has its own register
 function initAudio() {
@@ -122,55 +122,66 @@ function initAudio() {
   const dl = ac.createDelay(1), fb = ac.createGain(), lp = ac.createBiquadFilter();
   dl.delayTime.value = 0.33; fb.gain.value = 0.3; lp.type = 'lowpass'; lp.frequency.value = 2500;
   sfx.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(master);
-  noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
-  const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  loadSamples();
   setInterval(padTick, 250);
 }
 const hz = m => 440 * Math.pow(2, (m - 69) / 12);
-function tone(dest, type, f, t, a, peak, dec, detune = 0) {
-  const o = ac.createOscillator(), g = ac.createGain();
-  o.type = type; o.frequency.value = f; o.detune.value = detune;
+// [file suffix, measured MIDI pitch of that recording]; each note picks the nearest sample and pitches it with playbackRate
+const INST = {
+  harp: [['G3', 54.94], ['B3', 58.88], ['D4', 61.88], ['F4', 65.0], ['A4', 68.9], ['C5', 71.89], ['E5', 75.89], ['G5', 78.94], ['B5', 82.93], ['D6', 85.92], ['F6', 88.95]],
+  vln: [['G3', 55.01], ['B3', 59.0], ['D4', 61.99], ['Fs4', 65.99], ['A4', 69.0], ['C5', 72.0], ['E5', 76.0], ['G5', 79.02], ['B5', 83.01], ['D6', 86.01]],
+  glock: [['G5', 79.08], ['C6', 84.12], ['G6', 91.12], ['C7', 96.15], ['G7', 103.16], ['C8', 108.24]],
+};
+const SMP = {}; let smpReady = null;
+function loadSamples() {
+  if (smpReady) return smpReady;
+  const names = ['kick', 'tamb', 'claves', 'flap', 'bump', 'wall', 'flare', 'burn', 'warn'];
+  for (const k in INST) for (const [n] of INST[k]) names.push(k + '_' + n);
+  smpReady = Promise.all(names.map(n => fetch('audio/' + n + '.mp3').then(r => r.arrayBuffer())
+    .then(b => new Promise((ok, no) => ac.decodeAudioData(b, ok, no))).then(buf => { SMP[n] = buf; })
+    .catch(e => console.warn('sample', n, e))));
+  return smpReady;
+}
+function smp(name, dest, t, peak, dec, rate = 1, a = 0.002) {
+  const buf = SMP[name]; if (!buf) return;
+  const s = ac.createBufferSource(), g = ac.createGain();
+  s.buffer = buf; s.playbackRate.value = rate;
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec);
-  o.connect(g); g.connect(dest); o.start(t); o.stop(t + a + dec + 0.05); return o;
+  s.connect(g); g.connect(dest); s.start(t); s.stop(t + a + dec + 0.05);
 }
-function noise(dest, t, dur, type, f0, f1, peak) {
-  const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
-  s.buffer = noiseBuf; f.type = type; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur); f.Q.value = 1.2;
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  s.connect(f); f.connect(g); g.connect(dest); s.start(t, Math.random() * 0.4); s.stop(t + dur + 0.05);
+function note(inst, m, dest, t, peak, dec, a) {
+  if (inst === 'harp' && m > 90) { inst = 'glock'; peak *= 2.2; } // above the harp samples: glockenspiel
+  let best = INST[inst][0];
+  for (const x of INST[inst]) if (Math.abs(x[1] - m) < Math.abs(best[1] - m)) best = x;
+  smp(inst + '_' + best[0], dest, t, peak, dec, Math.pow(2, (m - best[1]) / 12), a);
 }
-function thud(t, peak) {
-  const o = ac.createOscillator(), g = ac.createGain();
-  o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.15);
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
-  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.3);
-}
+function thud(t, peak) { smp('kick', master, t, peak * 0.8, 0.3); }
 // night pad: a slow 4-chord loop with a soft heartbeat; louder while a round is live
 let padStep = 0;
 const CHORDS = [[50, 57, 62, 66], [47, 54, 59, 62], [43, 50, 55, 59], [45, 52, 57, 61]];
 function padTick() {
   if (!ac || ac.state !== 'running') return;
   const t = ac.currentTime + 0.05, s = padStep++ % 32;
-  if (s % 8 === 0) for (const m of CHORDS[(s / 8) | 0]) { tone(padBus, 'triangle', hz(m), t, 0.8, 0.035, 2.2, -5); tone(padBus, 'sine', hz(m + 12), t, 0.9, 0.02, 2, 5); }
+  if (s % 8 === 0) for (const m of CHORDS[(s / 8) | 0]) note('vln', m + 12, padBus, t, 0.15, 2.2, 0.8);
   if (s % 4 === 0) thud(t, live() ? 0.16 : 0.06);
-  if (live() && s % 2 === 1) noise(padBus, t, 0.05, 'highpass', 6000, 6000, 0.05);
+  if (live() && s % 2 === 1) smp('tamb', padBus, t, 0.06, 0.1);
 }
 function sfxFor(e) {
   if (!ac || ac.state !== 'running' || attract) return;
   const t = ac.currentTime + 0.005;
   switch (e.type) {
     case 'grab': { const n = Math.min(e.carry - 1, 14), deg = PENTA[n % 5] + 12 * Math.floor(n / 5);
-      tone(sfx, 'triangle', hz(ROOTS[e.i] + deg), t, 0.003, 0.2, 0.35); tone(sfx, 'sine', hz(ROOTS[e.i] + deg + 12), t, 0.003, 0.07, 0.2); break; }
-    case 'bump': thud(t, Math.min(0.9, 0.35 + e.v * 0.5)); noise(sfx, t, 0.12, 'bandpass', 900, 300, 0.25);
-      if (e.lost) for (let k = 0; k < Math.min(e.lost, 4); k++) tone(sfx, 'square', hz(84 - k * 3), t + k * 0.04, 0.002, 0.03, 0.08); break;
-    case 'wall': if (e.v > 0.5) noise(sfx, t, 0.06, 'lowpass', 600, 200, 0.12); break;
-    case 'warn': for (let k = 0; k < 4; k++) tone(sfx, 'sawtooth', hz(57 + k), t + k * 0.28, 0.01, 0.04, 0.22); noise(sfx, t, 1.2, 'bandpass', 300, 2400, 0.08); break;
-    case 'flare': noise(sfx, t, 0.9, 'lowpass', 5000, 200, 0.45); thud(t, 0.7); break;
-    case 'burn': tone(sfx, 'sawtooth', hz(52), t, 0.005, 0.08, 0.4); noise(sfx, t, 0.3, 'highpass', 3000, 800, 0.15); break;
-    case 'tick': tone(sfx, 'sine', hz(74), t, 0.002, 0.25, 0.15); break;
-    case 'go': tone(sfx, 'sine', hz(86), t, 0.002, 0.3, 0.4); tone(sfx, 'triangle', hz(79), t, 0.002, 0.15, 0.4); break;
-    case 'thrust': if (game.humans[e.i]) noise(sfx, t, 0.09, 'bandpass', 1800, 700, 0.05); break;
-    case 'roundover': { const w = e.winners[0] ?? 0; [0, 4, 7, 12, 16].forEach((d, k) => tone(sfx, 'triangle', hz(ROOTS[w] + d), t + k * 0.09, 0.003, 0.16, 0.5)); break; }
+      note('harp', ROOTS[e.i] + deg, sfx, t, 0.23, 0.5); break; }
+    case 'bump': thud(t, Math.min(0.9, 0.35 + e.v * 0.5)); smp('bump', sfx, t, 0.28, 0.15);
+      if (e.lost) for (let k = 0; k < Math.min(e.lost, 4); k++) note('glock', 96 - k * 3, sfx, t + k * 0.04, 0.12, 0.15); break;
+    case 'wall': if (e.v > 0.5) smp('wall', sfx, t, 0.05, 0.12); break;
+    case 'warn': for (let k = 0; k < 4; k++) note('vln', 69 + k, sfx, t + k * 0.28, 0.05, 0.22, 0.01); smp('warn', sfx, t, 0.08, 0.9); break;
+    case 'flare': smp('flare', sfx, t, 1.0, 0.9, 1, 0.01); thud(t, 0.7); break;
+    case 'burn': smp('burn', sfx, t, 0.52, 0.4, 1.4); break;
+    case 'tick': smp('claves', sfx, t, 1.1, 0.15); break;
+    case 'go': note('glock', 86, sfx, t, 0.9, 0.5); note('harp', 79, sfx, t, 0.7, 0.5); break;
+    case 'thrust': if (game.humans[e.i]) smp('flap', sfx, t, 0.7, 0.2, 1.3); break;
+    case 'roundover': { const w = e.winners[0] ?? 0; [0, 4, 7, 12, 16].forEach((d, k) => note('harp', ROOTS[w] + d, sfx, t + k * 0.09, 0.25, 0.6)); break; }
   }
 }
 
@@ -206,7 +217,7 @@ function renderSeats() {
   $('ladchip').textContent = rung >= LADDER.length ? 'ladder ✦' : 'ladder ' + (rung + 1) + '/' + LADDER.length;
   $('ladline').textContent = skill === 'ladder' ? ladderText() : '';
 }
-function joinChirp(i) { if (!ac) return; const t = ac.currentTime + 0.01; [0, 4, 7].forEach((d, k) => tone(sfx, 'triangle', hz(ROOTS[i] + 12 + d), t + k * 0.06, 0.003, 0.18, 0.25)); }
+function joinChirp(i) { if (!ac) return; const t = ac.currentTime + 0.01; [0, 4, 7].forEach((d, k) => note('harp', ROOTS[i] + 12 + d, sfx, t + k * 0.06, 0.35, 0.35)); }
 document.querySelectorAll('[data-skill]').forEach(b => b.onclick = () => { skill = b.dataset.skill === 'ladder' ? 'ladder' : +b.dataset.skill; store.set('skill', skill); renderSeats(); });
 
 async function startMatch() {

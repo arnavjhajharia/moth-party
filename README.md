@@ -12,4 +12,4 @@ Play: https://arnavjhajharia.github.io/moth-party/
 - `node test.js` simulates 40 all-CPU matches (no NaN, arena bounds, seat balance, event rates).
 - `?demo=1` all-CPU attract match; `&record=http://localhost:PORT/x.webm&rw=1920&rh=1080` captures canvas + audio.
 
-All code, art (canvas-drawn) and audio (WebAudio synthesis) are original. No assets downloaded.
+All code and art (canvas-drawn) are original. Audio is arranged live in WebAudio from recorded CC0 samples in audio/ (VSCO 2 Community Edition instruments, Kenney SFX; licenses in audio/LICENSE-*.txt).
