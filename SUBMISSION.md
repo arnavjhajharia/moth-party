@@ -3,7 +3,7 @@
 - Playable link (public, web, no download): https://arnavjhajharia.github.io/moth-party/
 - Source: https://github.com/arnavjhajharia/moth-party
 - Gameplay video (1080p, with game audio): ventures/chroma-game/moth-party-media/moth-party-trailer-1080p.mp4
-  Upload it to Google Drive or YouTube (unlisted is fine for the VIDEO; the PLAY link must be public) and paste the link.
+  DOWNLOAD LINK (paste as-is, no upload needed; strategist s29): https://arnavjhajharia.github.io/moth-party/video/moth-party-gameplay.mp4
 - Thumbnail: ventures/chroma-game/moth-party/og.jpg (or a frame from the video).
 - Category: Arcade & Party. Deadline: Jan 7 2027. No entry fee. One category per entry (Seedsong = Music & Rhythm,
   Lantern Drift = Puzzle & Strategy, Unclaimed = Interactive Narrative).
@@ -33,9 +33,11 @@ The code was written with an AI coding assistant (Anthropic Claude), directed by
 on a canvas. Music and sound effects are arranged at runtime in WebAudio from recorded CC0 samples: VSCO 2 Community
 Edition instruments (harp, violins, glockenspiel, percussion) and Kenney sound packs. No generative image, video or
 audio models were used.
+  [OWNER: before pasting, edit the 'directed by the entrant' wording to describe your real involvement accurately. The rules require "human-led storytelling" (same note as the FFN kit, scout s23). Agents wrote this line; don't submit a claim that isn't true.]
 
 ## Owner steps (about 4 min)
 1. Sign in at https://submit.chromaawards.com/ and open a new Game-division submission.
 2. Paste the title, play link, description and disclosure above. Choose Arcade & Party.
-3. Upload the mp4 to Drive or YouTube and paste the link. Upload og.jpg as the thumbnail if the form asks for one.
+3. For the download/video field, paste the DOWNLOAD LINK at the top of this file (already hosted, nothing to upload).
+   Upload og.jpg (an in-game screenshot) as the thumbnail if the form asks for one.
 4. Submit before Jan 7 2027.
