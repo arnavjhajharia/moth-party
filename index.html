@@ -50,6 +50,11 @@
   .board b { display: block; font-size: 22px; }
   .foot { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 10.5px; color: rgba(163,156,179,.6); pointer-events: none; }
   body.playing .foot { display: none; }
+  /* first visit: one big button, multiplayer seats and CPU options one tap away */
+  body.first #seats, body.first .opts, body.first #ladline, body.first .help { display: none; }
+  body.first #start { font-size: 26px; padding: 14px 56px; }
+  #mpmore, .firsthint { display: none; } body.first #mpmore { display: inline-block; margin-top: 14px; }
+  body.first .firsthint { display: block; color: var(--dim); font-size: 13px; line-height: 1.7; margin-top: 16px; }
 </style>
 </head>
 <body>
@@ -61,6 +66,8 @@
     <p class="tag">one button each · four moths · one lamp</p>
     <div class="seats" id="seats"></div>
     <div class="row"><button class="go" id="start">Fly ▸</button></div>
+    <p class="firsthint"><b>Hold</b> (tap, mouse or Space) to fly straight · <b>let go</b> to spin and aim.<br>Grab sparks. When the lamp flickers, get out.</p>
+    <button class="chip" id="mpmore">2-4 players &amp; CPU settings</button>
     <div class="opts row">CPU moths:
       <button class="chip" data-skill="ladder" id="ladchip">ladder</button><button class="chip" data-skill="0.45">sleepy</button><button class="chip" data-skill="0.7">buzzing</button><button class="chip" data-skill="0.92">feral</button>
     </div>
@@ -246,6 +253,17 @@ function toLobby() {
   $('over').classList.add('hidden'); $('lobby').classList.remove('hidden'); document.body.classList.remove('playing'); renderSeats();
 }
 $('start').onclick = playAgain; $('again').onclick = playAgain; $('tolobby').onclick = toLobby;
+// first visit (never finished a match, no ?demo): only "Play ▸"; a tap on empty lobby space also starts a solo match
+if (!store.get('played', false) && !params.has('demo') && !params.has('selftest')) {
+  document.body.classList.add('first'); $('start').textContent = 'Play ▸';
+  const unfirst = () => { document.body.classList.remove('first'); $('start').textContent = 'Fly ▸'; };
+  $('mpmore').onclick = e => { e.stopPropagation(); unfirst(); };
+  addEventListener('keydown', e => { if (document.body.classList.contains('first') && KEYCODES[e.code] != null) unfirst(); }, true); // a seat key = local multiplayer intent
+  $('lobby').addEventListener('pointerdown', e => {
+    if (!document.body.classList.contains('first') || e.target.closest('button,input,label,.seat')) return;
+    e.preventDefault(); playAgain();
+  });
+}
 
 // ---------- input ----------
 addEventListener('keydown', e => {
@@ -313,6 +331,7 @@ function showChampion() {
   $('board').innerHTML = game.moths.map((m, i) => `<div style="border-color:${i === w ? COLORS[i] : ''}"><b style="color:${COLORS[i]}">${game.wins[i]}</b>${NAMES[i]}${game.humans[i] ? ' · you' : ''}</div>`).join('');
   $('over').classList.remove('hidden'); document.body.classList.remove('playing');
   if (window.Portal) { Portal.stop(); if (game.humans[w]) Portal.happy(); }
+  if (game.humans.some(Boolean)) { store.set('played', true); document.body.classList.remove('first'); $('start').textContent = 'Fly ▸'; }
   padBus.gain.setTargetAtTime(0.4, ac.currentTime, 1);
   if (recorder && recorder.state === 'recording') setTimeout(() => recorder.stop(), 3000);
   if (params.has('demo')) setTimeout(startMatch, 6000);
