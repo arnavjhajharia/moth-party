@@ -200,7 +200,8 @@ document.querySelectorAll('[data-skill]').forEach(b => b.onclick = () => { skill
 
 async function startMatch() {
   initAudio(); try { await ac.resume(); } catch {}
-  attract = false;
+  attract = false; matchesPlayed++;
+  if (window.Portal) { Portal.setAudio(ac); Portal.start(); }
   game = MothSim.newGame({ humans: humans.slice(), cpuSkill: skill });
   parts.length = 0; pops.length = 0; banner = null; clearTimeout(bannerTimer);
   $('lobby').classList.add('hidden'); $('over').classList.add('hidden');
@@ -212,11 +213,15 @@ async function startMatch() {
 function startAttract() {
   attract = true; game = MothSim.newGame({ humans: [false, false, false, false], cpuSkill: 0.8, seed: (Math.random() * 1e9) | 0 }); MothSim.startRound(game);
 }
+let matchesPlayed = 0;
+// between matches the portal (if any) may show an ad; Portal.midgame always continues to the next match
+function playAgain() { if (window.Portal && matchesPlayed > 0 && !params.has('demo')) Portal.midgame(startMatch); else startMatch(); }
 function toLobby() {
+  if (window.Portal) Portal.stop();
   banner = null; clearTimeout(bannerTimer); startAttract(); if (ac) padBus.gain.setTargetAtTime(0.4, ac.currentTime, 1);
   $('over').classList.add('hidden'); $('lobby').classList.remove('hidden'); document.body.classList.remove('playing'); renderSeats();
 }
-$('start').onclick = startMatch; $('again').onclick = startMatch; $('tolobby').onclick = toLobby;
+$('start').onclick = playAgain; $('again').onclick = playAgain; $('tolobby').onclick = toLobby;
 
 // ---------- input ----------
 addEventListener('keydown', e => {
@@ -225,10 +230,10 @@ addEventListener('keydown', e => {
   const inLobby = !$('lobby').classList.contains('hidden');
   if (inLobby) {
     if (i != null) { humans[i] = !humans[i]; initAudio(); ac.resume(); if (humans[i]) joinChirp(i); renderSeats(); }
-    else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); startMatch(); }
+    else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); playAgain(); }
     return;
   }
-  if (!$('over').classList.contains('hidden')) { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); startMatch(); } if (e.code === 'Escape') toLobby(); return; }
+  if (!$('over').classList.contains('hidden')) { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); playAgain(); } if (e.code === 'Escape') toLobby(); return; }
   if (e.code === 'Escape') { toLobby(); return; }
   if (i != null) { buttons[i] = 1; e.preventDefault(); }
 });
@@ -274,6 +279,7 @@ function showChampion() {
   $('champsub').textContent = (game.humans[w] ? 'the brightest moth at the party' : 'a CPU moth stole the lamp. rematch?') + ` · ${game.round} rounds`;
   $('board').innerHTML = game.moths.map((m, i) => `<div style="border-color:${i === w ? COLORS[i] : ''}"><b style="color:${COLORS[i]}">${game.wins[i]}</b>${NAMES[i]}${game.humans[i] ? ' · you' : ''}</div>`).join('');
   $('over').classList.remove('hidden'); document.body.classList.remove('playing');
+  if (window.Portal) { Portal.stop(); if (game.humans[w]) Portal.happy(); }
   padBus.gain.setTargetAtTime(0.4, ac.currentTime, 1);
   if (recorder && recorder.state === 'recording') setTimeout(() => recorder.stop(), 3000);
   if (params.has('demo')) setTimeout(startMatch, 6000);
