@@ -180,7 +180,7 @@ let game = MothSim.newGame({ humans: [false, false, false, false], cpuSkill: 0.8
 let attract = true; // an all-CPU match plays silently behind the lobby
 const buttons = [0, 0, 0, 0];
 let banner = null; // { text, sub, col, t }
-let shake = 0, bannerTimer = null;
+let shake = 0, bannerTimer = null, hitstop = 0;
 const parts = [], pops = [];
 function live() { return game.state === 'play' || game.state === 'countdown'; }
 
@@ -250,7 +250,7 @@ function handleEvents() {
   for (const e of game.events) {
     sfxFor(e);
     if (e.type === 'grab') { const [x, y] = P(e.x, e.y); burst(x, y, COLORS[e.i], 8, 120); pops.push({ x, y, text: '+' + 1, col: COLORS[e.i], t: performance.now() }); }
-    if (e.type === 'bump') { const [x, y] = P(e.x, e.y); burst(x, y, '#fff3d6', 14 + e.lost * 4, 260); shake = Math.min(14, 4 + e.v * 9);
+    if (e.type === 'bump') { const [x, y] = P(e.x, e.y); burst(x, y, '#fff3d6', 14 + e.lost * 4, 260); shake = Math.min(14, 4 + e.v * 9); if (e.lost && !attract) hitstop = Math.min(0.09, 0.03 + e.v * 0.05);
       if (e.lost) pops.push({ x, y: y - 18, text: NAMES[e.hitter] + ' knocks ' + e.lost + ' loose!', col: COLORS[e.hitter], t: performance.now(), big: 1 }); }
     if (e.type === 'flare') shake = 10;
     if (e.type === 'burn') { const m = game.moths[e.i], [x, y] = P(m.x, m.y); burst(x, y, '#ff9d5c', 18, 200);
@@ -300,6 +300,7 @@ function frame() {
   requestAnimationFrame(frame);
   const now = performance.now(); let dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (game.state !== 'idle') {
+    if (hitstop > 0) { hitstop -= dt; dt = 0; }
     acc += dt;
     while (acc >= 1 / 120) { MothSim.step(game, 1 / 120, buttons); acc -= 1 / 120; }
     handleEvents();
