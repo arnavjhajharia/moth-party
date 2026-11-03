@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Moth Party: one button, four moths, one lamp</title>
+<meta name="description" content="A one-button party game for 1-4 players on one keyboard or one phone. Moths circle a lamp: hold to fly, release to spin. Grab sparks, bump your friends, dodge the flare. CPU moths fill empty seats.">
+<meta property="og:title" content="Moth Party">
+<meta property="og:description" content="One button each. Four moths. One lamp. A 30-second-to-learn party game in your browser.">
+<meta property="og:image" content="https://arnavjhajharia.github.io/moth-party/og.jpg">
+<meta name="theme-color" content="#0a0812">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#fbf3e4; --dim:#a39cb3; --bg:#0a0812; --p0:#ff7ab6; --p1:#ffd36e; --p2:#6ee7ff; --p3:#9dff8a; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; touch-action: none;
+    font-family: 'Space Mono', ui-monospace, monospace; -webkit-user-select: none; user-select: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto;
+    background: radial-gradient(ellipse at 50% 45%, rgba(40,24,30,.55), rgba(10,8,18,.93)); transition: opacity .3s; }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+  .panel { width: min(760px, 100%); text-align: center; }
+  h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(54px, 12vw, 120px); line-height: .88; letter-spacing: -.03em;
+    color: #ffe9b8; text-shadow: 0 0 40px rgba(255,190,90,.55), 0 0 2px #fff; }
+  .tag { font-size: clamp(12px, 2.2vw, 15px); color: var(--dim); margin: 14px 0 24px; }
+  .seats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
+  @media (max-width: 620px) { .seats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .overlay { align-items: flex-start; padding-top: 34px; } }
+  .seat { border: 2px dashed rgba(251,243,228,.18); border-radius: 18px; padding: 14px 8px 12px; cursor: pointer; background: rgba(255,255,255,.02);
+    color: var(--ink); font: inherit; transition: transform .12s, background .2s, border-color .2s; }
+  .seat:active { transform: scale(.97); }
+  .seat.on { border-style: solid; background: rgba(255,255,255,.07); }
+  .seat .k { display: inline-block; min-width: 42px; padding: 6px 10px; border-radius: 10px; font-weight: 700; font-size: 22px; color: var(--bg); margin-bottom: 8px; }
+  .seat b { display: block; font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; }
+  .seat small { display: block; color: var(--dim); font-size: 11px; margin-top: 3px; }
+  .seat.on small { color: var(--ink); }
+  .go { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 26px; padding: 12px 46px; border-radius: 999px; border: none; cursor: pointer;
+    color: #241406; background: linear-gradient(100deg, #ffd36e, #ff9d5c); box-shadow: 0 0 44px rgba(255,170,80,.45); }
+  .go:active { transform: scale(.97); }
+  .chip { border: 1px solid rgba(251,243,228,.25); background: transparent; color: var(--dim); border-radius: 999px; padding: 8px 16px; font: inherit; font-size: 12px; cursor: pointer; }
+  .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .help { color: var(--dim); font-size: 12px; line-height: 1.75; margin-top: 22px; }
+  .help b { color: var(--ink); font-weight: 400; }
+  .opts { margin-top: 14px; color: var(--dim); font-size: 11.5px; }
+  .opts button.sel { color: var(--bg); background: var(--ink); border-color: var(--ink); }
+  .champ { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(44px, 10vw, 92px); line-height: 1; }
+  .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 18px 0 24px; }
+  .board div { border: 1px solid rgba(251,243,228,.14); border-radius: 12px; padding: 10px 4px; font-size: 12px; }
+  .board b { display: block; font-size: 22px; }
+  .foot { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 10.5px; color: rgba(163,156,179,.6); pointer-events: none; }
+  body.playing .foot { display: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="overlay" id="lobby">
+  <div class="panel">
+    <h1>Moth Party</h1>
+    <p class="tag">one button each · four moths · one lamp</p>
+    <div class="seats" id="seats"></div>
+    <div class="row"><button class="go" id="start">Fly ▸</button></div>
+    <div class="opts row">CPU moths:
+      <button class="chip" data-skill="0.45">sleepy</button><button class="chip" data-skill="0.7">buzzing</button><button class="chip" data-skill="0.92">feral</button>
+    </div>
+    <p class="help">
+      Press your key (or tap your seat) to join. Empty seats are flown by CPU moths, so you can play solo.<br>
+      <b>Hold</b> to fly straight · <b>let go</b> to spin and aim.<br>
+      Grab sparks. Ram a rival to knock their sparks loose. When the lamp flickers, <b>get out</b>: the flare burns half your sparks.<br>
+      Most sparks after 45 seconds wins the round. First to 3 rounds wins the party.
+    </p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="over">
+  <div class="panel">
+    <div class="champ" id="champ"></div>
+    <p class="tag" id="champsub" style="margin-top:10px"></p>
+    <div class="board" id="board"></div>
+    <div class="row"><button class="go" id="again">Rematch</button><button class="chip" id="tolobby">Change players</button></div>
+  </div>
+</div>
+
+<div class="foot">original game · procedural WebAudio · keys Q P Z M or tap your corner</div>
+
+<script src="sim.js"></script>
+<script>
+'use strict';
+const { C, COLORS, NAMES } = MothSim;
+const KEYS = ['Q', 'P', 'Z', 'M'];
+const KEYCODES = { KeyQ: 0, KeyP: 1, KeyZ: 2, KeyM: 3 };
+const params = new URLSearchParams(location.search);
+const $ = id => document.getElementById(id);
+const cv = $('c'), cx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1, CX = 0, CY = 0, SC = 1;
+const FIXED = params.get('rw') ? [+params.get('rw'), +(params.get('rh') || 1080)] : null;
+function resize() {
+  DPR = FIXED ? 1 : Math.min(2, devicePixelRatio || 1);
+  W = FIXED ? FIXED[0] : innerWidth; H = FIXED ? FIXED[1] : innerHeight;
+  if (FIXED) cv.style.objectFit = 'contain';
+  cv.width = W * DPR; cv.height = H * DPR;
+  CX = W / 2; CY = H / 2 + (W < 620 ? 10 : 0); SC = Math.min(W, H - (W < 620 ? 150 : 40)) * 0.47;
+}
+addEventListener('resize', resize); resize();
+const store = { get(k, d) { try { const v = localStorage.getItem('moth:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('moth:' + k, JSON.stringify(v)); } catch {} } };
+
+// ---------- audio (all synthesized) ----------
+let ac = null, master, padBus, sfx, noiseBuf, masterOut, recorder = null;
+const PENTA = [0, 2, 4, 7, 9];
+const ROOTS = [62, 65, 69, 67]; // each moth has its own register
+function initAudio() {
+  if (ac) return;
+  ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  master = ac.createGain(); master.gain.value = 0.7;
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 5;
+  master.connect(comp); comp.connect(ac.destination); masterOut = comp;
+  sfx = ac.createGain(); sfx.gain.value = 0.9; sfx.connect(master);
+  padBus = ac.createGain(); padBus.gain.value = 0.0; padBus.connect(master);
+  const dl = ac.createDelay(1), fb = ac.createGain(), lp = ac.createBiquadFilter();
+  dl.delayTime.value = 0.33; fb.gain.value = 0.3; lp.type = 'lowpass'; lp.frequency.value = 2500;
+  sfx.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(master);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  setInterval(padTick, 250);
+}
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+function tone(dest, type, f, t, a, peak, dec, detune = 0) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.value = f; o.detune.value = detune;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec);
+  o.connect(g); g.connect(dest); o.start(t); o.stop(t + a + dec + 0.05); return o;
+}
+function noise(dest, t, dur, type, f0, f1, peak) {
+  const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  s.buffer = noiseBuf; f.type = type; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur); f.Q.value = 1.2;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(dest); s.start(t, Math.random() * 0.4); s.stop(t + dur + 0.05);
+}
+function thud(t, peak) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.15);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.3);
+}
+// night pad: a slow 4-chord loop with a soft heartbeat; louder while a round is live
+let padStep = 0;
+const CHORDS = [[50, 57, 62, 66], [47, 54, 59, 62], [43, 50, 55, 59], [45, 52, 57, 61]];
+function padTick() {
+  if (!ac || ac.state !== 'running') return;
+  const t = ac.currentTime + 0.05, s = padStep++ % 32;
+  if (s % 8 === 0) for (const m of CHORDS[(s / 8) | 0]) { tone(padBus, 'triangle', hz(m), t, 0.8, 0.035, 2.2, -5); tone(padBus, 'sine', hz(m + 12), t, 0.9, 0.02, 2, 5); }
+  if (s % 4 === 0) thud(t, live() ? 0.16 : 0.06);
+  if (live() && s % 2 === 1) noise(padBus, t, 0.05, 'highpass', 6000, 6000, 0.05);
+}
+function sfxFor(e) {
+  if (!ac || ac.state !== 'running' || attract) return;
+  const t = ac.currentTime + 0.005;
+  switch (e.type) {
+    case 'grab': { const n = Math.min(e.carry - 1, 14), deg = PENTA[n % 5] + 12 * Math.floor(n / 5);
+      tone(sfx, 'triangle', hz(ROOTS[e.i] + deg), t, 0.003, 0.2, 0.35); tone(sfx, 'sine', hz(ROOTS[e.i] + deg + 12), t, 0.003, 0.07, 0.2); break; }
+    case 'bump': thud(t, Math.min(0.9, 0.35 + e.v * 0.5)); noise(sfx, t, 0.12, 'bandpass', 900, 300, 0.25);
+      if (e.lost) for (let k = 0; k < Math.min(e.lost, 4); k++) tone(sfx, 'square', hz(84 - k * 3), t + k * 0.04, 0.002, 0.03, 0.08); break;
+    case 'wall': if (e.v > 0.5) noise(sfx, t, 0.06, 'lowpass', 600, 200, 0.12); break;
+    case 'warn': for (let k = 0; k < 4; k++) tone(sfx, 'sawtooth', hz(57 + k), t + k * 0.28, 0.01, 0.04, 0.22); noise(sfx, t, 1.2, 'bandpass', 300, 2400, 0.08); break;
+    case 'flare': noise(sfx, t, 0.9, 'lowpass', 5000, 200, 0.45); thud(t, 0.7); break;
+    case 'burn': tone(sfx, 'sawtooth', hz(52), t, 0.005, 0.08, 0.4); noise(sfx, t, 0.3, 'highpass', 3000, 800, 0.15); break;
+    case 'tick': tone(sfx, 'sine', hz(74), t, 0.002, 0.25, 0.15); break;
+    case 'go': tone(sfx, 'sine', hz(86), t, 0.002, 0.3, 0.4); tone(sfx, 'triangle', hz(79), t, 0.002, 0.15, 0.4); break;
+    case 'thrust': if (game.humans[e.i]) noise(sfx, t, 0.09, 'bandpass', 1800, 700, 0.05); break;
+    case 'roundover': { const w = e.winners[0] ?? 0; [0, 4, 7, 12, 16].forEach((d, k) => tone(sfx, 'triangle', hz(ROOTS[w] + d), t + k * 0.09, 0.003, 0.16, 0.5)); break; }
+  }
+}
+
+// ---------- state ----------
+let humans = [false, false, false, false];
+let skill = store.get('skill', 0.7);
+let game = MothSim.newGame({ humans: [false, false, false, false], cpuSkill: 0.8 });
+let attract = true; // an all-CPU match plays silently behind the lobby
+const buttons = [0, 0, 0, 0];
+let banner = null; // { text, sub, col, t }
+let shake = 0, bannerTimer = null;
+const parts = [], pops = [];
+function live() { return game.state === 'play' || game.state === 'countdown'; }
+
+function renderSeats() {
+  const box = $('seats'); box.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const b = document.createElement('button'); b.className = 'seat' + (humans[i] ? ' on' : '');
+    b.style.borderColor = humans[i] ? COLORS[i] : '';
+    b.innerHTML = `<span class="k" style="background:${COLORS[i]}">${KEYS[i]}</span><b style="color:${COLORS[i]}">${NAMES[i]}</b><small>${humans[i] ? 'you! (tap to drop)' : 'CPU moth'}</small>`;
+    b.onclick = () => { humans[i] = !humans[i]; initAudio(); ac.resume(); if (humans[i]) joinChirp(i); renderSeats(); };
+    box.appendChild(b);
+  }
+  document.querySelectorAll('[data-skill]').forEach(b => b.classList.toggle('sel', +b.dataset.skill === skill));
+}
+function joinChirp(i) { if (!ac) return; const t = ac.currentTime + 0.01; [0, 4, 7].forEach((d, k) => tone(sfx, 'triangle', hz(ROOTS[i] + 12 + d), t + k * 0.06, 0.003, 0.18, 0.25)); }
+document.querySelectorAll('[data-skill]').forEach(b => b.onclick = () => { skill = +b.dataset.skill; store.set('skill', skill); renderSeats(); });
+
+async function startMatch() {
+  initAudio(); try { await ac.resume(); } catch {}
+  attract = false;
+  game = MothSim.newGame({ humans: humans.slice(), cpuSkill: skill });
+  parts.length = 0; pops.length = 0; banner = null; clearTimeout(bannerTimer);
+  $('lobby').classList.add('hidden'); $('over').classList.add('hidden');
+  document.body.classList.add('playing');
+  padBus.gain.setTargetAtTime(1, ac.currentTime, 1);
+  MothSim.startRound(game);
+  if (params.get('record') && !recorder) startRecording(params.get('record'));
+}
+function startAttract() {
+  attract = true; game = MothSim.newGame({ humans: [false, false, false, false], cpuSkill: 0.8, seed: (Math.random() * 1e9) | 0 }); MothSim.startRound(game);
+}
+function toLobby() {
+  banner = null; clearTimeout(bannerTimer); startAttract(); if (ac) padBus.gain.setTargetAtTime(0.4, ac.currentTime, 1);
+  $('over').classList.add('hidden'); $('lobby').classList.remove('hidden'); document.body.classList.remove('playing'); renderSeats();
+}
+$('start').onclick = startMatch; $('again').onclick = startMatch; $('tolobby').onclick = toLobby;
+
+// ---------- input ----------
+addEventListener('keydown', e => {
+  if (e.repeat) return;
+  const i = KEYCODES[e.code];
+  const inLobby = !$('lobby').classList.contains('hidden');
+  if (inLobby) {
+    if (i != null) { humans[i] = !humans[i]; initAudio(); ac.resume(); if (humans[i]) joinChirp(i); renderSeats(); }
+    else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); startMatch(); }
+    return;
+  }
+  if (!$('over').classList.contains('hidden')) { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); startMatch(); } if (e.code === 'Escape') toLobby(); return; }
+  if (e.code === 'Escape') { toLobby(); return; }
+  if (i != null) { buttons[i] = 1; e.preventDefault(); }
+});
+addEventListener('keyup', e => { const i = KEYCODES[e.code]; if (i != null) buttons[i] = 0; });
+addEventListener('blur', () => buttons.fill(0));
+// touch: each corner of the screen is a seat's button (hold anywhere in your quadrant)
+const ptrSeat = new Map();
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault(); if (ac) ac.resume();
+  const i = (e.clientY > innerHeight / 2 ? 2 : 0) + (e.clientX > innerWidth / 2 ? 1 : 0);
+  ptrSeat.set(e.pointerId, i); buttons[i] = 1;
+});
+const ptrUp = e => { const i = ptrSeat.get(e.pointerId); if (i != null) { ptrSeat.delete(e.pointerId); if (![...ptrSeat.values()].includes(i)) buttons[i] = 0; } };
+cv.addEventListener('pointerup', ptrUp); cv.addEventListener('pointercancel', ptrUp);
+
+// ---------- events -> juice ----------
+function P(x, y) { return [CX + x * SC, CY + y * SC]; }
+function handleEvents() {
+  for (const e of game.events) {
+    sfxFor(e);
+    if (e.type === 'grab') { const [x, y] = P(e.x, e.y); burst(x, y, COLORS[e.i], 8, 120); pops.push({ x, y, text: '+' + 1, col: COLORS[e.i], t: performance.now() }); }
+    if (e.type === 'bump') { const [x, y] = P(e.x, e.y); burst(x, y, '#fff3d6', 14 + e.lost * 4, 260); shake = Math.min(14, 4 + e.v * 9);
+      if (e.lost) pops.push({ x, y: y - 18, text: NAMES[e.hitter] + ' knocks ' + e.lost + ' loose!', col: COLORS[e.hitter], t: performance.now(), big: 1 }); }
+    if (e.type === 'flare') shake = 10;
+    if (e.type === 'burn') { const m = game.moths[e.i], [x, y] = P(m.x, m.y); burst(x, y, '#ff9d5c', 18, 200);
+      if (e.lost) pops.push({ x, y: y - 18, text: 'singed! −' + e.lost, col: '#ff9d5c', t: performance.now(), big: 1 }); }
+    if (e.type === 'round') banner = null;
+    if (e.type === 'roundover') {
+      const ws = e.winners;
+      const text = ws.length === 0 ? 'nobody glows' : ws.length === 1 ? NAMES[ws[0]] + ' takes the round' : ws.map(i => NAMES[i]).join(' & ') + ' tie';
+      banner = { text, col: ws.length === 1 ? COLORS[ws[0]] : '#fbf3e4', t: performance.now() };
+      clearTimeout(bannerTimer);
+      if (attract) { banner = null; bannerTimer = setTimeout(() => { if (!attract) return; if (game.state === 'matchover') startAttract(); else MothSim.startRound(game); }, 1500); continue; }
+      if (e.match >= 0) bannerTimer = setTimeout(showChampion, 2200);
+      else bannerTimer = setTimeout(() => { if (game.state === 'roundover') MothSim.startRound(game); }, 2600);
+    }
+  }
+  game.events.length = 0;
+}
+function showChampion() {
+  const w = game.matchWinner;
+  $('champ').textContent = NAMES[w] + ' wins!'; $('champ').style.color = COLORS[w];
+  $('champsub').textContent = (game.humans[w] ? 'the brightest moth at the party' : 'a CPU moth stole the lamp. rematch?') + ` · ${game.round} rounds`;
+  $('board').innerHTML = game.moths.map((m, i) => `<div style="border-color:${i === w ? COLORS[i] : ''}"><b style="color:${COLORS[i]}">${game.wins[i]}</b>${NAMES[i]}${game.humans[i] ? ' · you' : ''}</div>`).join('');
+  $('over').classList.remove('hidden'); document.body.classList.remove('playing');
+  padBus.gain.setTargetAtTime(0.4, ac.currentTime, 1);
+  if (recorder && recorder.state === 'recording') setTimeout(() => recorder.stop(), 3000);
+  if (params.has('demo')) setTimeout(startMatch, 6000);
+}
+function burst(x, y, col, n, sp) {
+  for (let k = 0; k < n; k++) { const a = Math.random() * 6.283, v = sp * (0.3 + Math.random());
+    parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, col }); }
+}
+
+// ---------- sprites ----------
+const sprites = {};
+function glow(col, px) {
+  const k = col + px; if (sprites[k]) return sprites[k];
+  const c = document.createElement('canvas'); c.width = c.height = px; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, px / 2);
+  gr.addColorStop(0, col); gr.addColorStop(0.25, col + 'aa'); gr.addColorStop(1, col + '00');
+  g.fillStyle = gr; g.fillRect(0, 0, px, px); return sprites[k] = c;
+}
+
+// ---------- render ----------
+let last = performance.now(), acc = 0;
+const stars = Array.from({ length: 90 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.4 + 0.3, p: Math.random() * 6 }));
+function frame() {
+  requestAnimationFrame(frame);
+  const now = performance.now(); let dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (game.state !== 'idle') {
+    acc += dt;
+    while (acc >= 1 / 120) { MothSim.step(game, 1 / 120, buttons); acc -= 1 / 120; }
+    handleEvents();
+  }
+  draw(now, dt);
+}
+function draw(now, dt) {
+  cx.setTransform(DPR, 0, 0, DPR, 0, 0); cx.globalAlpha = 1; cx.globalCompositeOperation = 'source-over';
+  cx.fillStyle = '#0a0812'; cx.fillRect(0, 0, W, H);
+  // shake
+  let sx = 0, sy = 0; if (shake > 0.2) { sx = (Math.random() - 0.5) * shake; sy = (Math.random() - 0.5) * shake; shake *= Math.pow(0.02, dt); }
+  cx.setTransform(DPR, 0, 0, DPR, sx * DPR, sy * DPR);
+  const L = game.lamp, flick = L.phase === 'warn' ? (Math.random() < 0.35 ? 0.35 : 1) : 1;
+  const flareK = L.phase === 'flare' ? 1 - L.t / C.FLARE_T : 0;
+  // warm wash from the lamp
+  const wash = cx.createRadialGradient(CX, CY, 0, CX, CY, Math.max(W, H) * 0.7);
+  wash.addColorStop(0, `rgba(255,${150 + flareK * 60},70,${0.22 * flick + flareK * 0.25})`); wash.addColorStop(0.5, 'rgba(60,30,60,.12)'); wash.addColorStop(1, 'rgba(10,8,18,0)');
+  cx.fillStyle = wash; cx.fillRect(-20, -20, W + 40, H + 40);
+  // stars
+  for (const s of stars) { cx.globalAlpha = 0.25 + 0.25 * Math.sin(now / 900 + s.p); cx.fillStyle = '#fbf3e4'; cx.fillRect(s.x * W, s.y * H, s.s, s.s); }
+  cx.globalAlpha = 1;
+  // arena rim
+  cx.strokeStyle = 'rgba(251,243,228,.10)'; cx.lineWidth = 2; cx.beginPath(); cx.arc(CX, CY, SC, 0, 6.283); cx.stroke();
+  cx.strokeStyle = 'rgba(251,243,228,.04)'; cx.lineWidth = 14; cx.beginPath(); cx.arc(CX, CY, SC + 8, 0, 6.283); cx.stroke();
+  // flare zone
+  if (L.phase === 'warn') {
+    const k = L.t / C.FLARE_WARN;
+    cx.setLineDash([10, 10]); cx.lineDashOffset = -now / 30;
+    cx.strokeStyle = `rgba(255,157,92,${0.35 + 0.5 * k})`; cx.lineWidth = 2 + 3 * k;
+    cx.beginPath(); cx.arc(CX, CY, C.FLARE_R * SC, 0, 6.283); cx.stroke(); cx.setLineDash([]);
+    cx.fillStyle = `rgba(255,140,60,${0.05 + 0.1 * k})`; cx.beginPath(); cx.arc(CX, CY, C.FLARE_R * SC, 0, 6.283); cx.fill();
+  }
+  if (L.phase === 'flare') {
+    const g = cx.createRadialGradient(CX, CY, 0, CX, CY, C.FLARE_R * SC * (1 + 0.15 * (1 - flareK)));
+    g.addColorStop(0, `rgba(255,250,220,${0.95 * flareK + 0.05})`); g.addColorStop(0.6, `rgba(255,170,80,${0.7 * flareK})`); g.addColorStop(1, 'rgba(255,120,60,0)');
+    cx.fillStyle = g; cx.beginPath(); cx.arc(CX, CY, C.FLARE_R * SC * 1.2, 0, 6.283); cx.fill();
+  }
+  // lamp
+  const lampR = C.LAMP_R * SC;
+  const lg = glow('#ffcf7a', 256); const gs = lampR * (5 + 1.2 * Math.sin(now / 400)) * flick;
+  cx.globalCompositeOperation = 'lighter'; cx.drawImage(lg, CX - gs / 2, CY - gs / 2, gs, gs); cx.globalCompositeOperation = 'source-over';
+  cx.fillStyle = '#fff4d8'; cx.beginPath(); cx.arc(CX, CY, lampR * 0.62, 0, 6.283); cx.fill();
+  cx.strokeStyle = 'rgba(255,220,160,.6)'; cx.lineWidth = 2; cx.beginPath(); cx.arc(CX, CY, lampR, 0, 6.283); cx.stroke();
+  // sparks
+  cx.globalCompositeOperation = 'lighter';
+  for (const s of game.sparks) {
+    const [x, y] = P(s.x, s.y), tw = 0.75 + 0.25 * Math.sin(now / 160 + s.born * 13), r = C.SPARK_R * SC * 3.2 * tw;
+    cx.globalAlpha = s.age < 0.35 ? 0.5 : 1;
+    cx.drawImage(glow('#ffe7a3', 64), x - r, y - r, r * 2, r * 2);
+  }
+  cx.globalAlpha = 1; cx.globalCompositeOperation = 'source-over';
+  for (const s of game.sparks) { const [x, y] = P(s.x, s.y); cx.fillStyle = '#fffbe8'; cx.beginPath(); cx.arc(x, y, C.SPARK_R * SC * 0.45, 0, 6.283); cx.fill(); }
+  // moths
+  const leadSet = game.state === 'play' ? MothSim.leaders(game) : [];
+  for (const m of game.moths) drawMoth(m, now, leadSet.includes(m.i) && m.carry > 0);
+  // particles
+  cx.globalCompositeOperation = 'lighter';
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= Math.pow(0.08, dt); p.vy *= Math.pow(0.08, dt); p.life -= dt * 1.6;
+    if (p.life <= 0) { parts.splice(i, 1); continue; }
+    cx.globalAlpha = p.life; cx.fillStyle = p.col; cx.beginPath(); cx.arc(p.x, p.y, 1 + 2 * p.life, 0, 6.283); cx.fill();
+  }
+  cx.globalAlpha = 1; cx.globalCompositeOperation = 'source-over';
+  // pops
+  cx.textAlign = 'center';
+  for (let i = pops.length - 1; i >= 0; i--) {
+    const p = pops[i], k = (now - p.t) / (p.big ? 1300 : 700); if (k >= 1) { pops.splice(i, 1); continue; }
+    cx.globalAlpha = 1 - k * k; cx.fillStyle = p.col; cx.font = p.big ? "800 18px 'Bricolage Grotesque', sans-serif" : "700 13px 'Space Mono', monospace";
+    cx.fillText(p.text, p.x, p.y - k * 28);
+  }
+  cx.globalAlpha = 1;
+  cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (game.state !== 'idle' && !attract) hud(now);
+}
+function drawMoth(m, now, leading) {
+  const [x, y] = P(m.x, m.y), s = C.MOTH_R * SC * 1.3, col = COLORS[m.i];
+  if (m.held && Math.random() < 0.6) parts.push({ x: x - Math.cos(m.a) * s, y: y - Math.sin(m.a) * s, vx: -Math.cos(m.a) * 40 + (Math.random() - .5) * 30, vy: -Math.sin(m.a) * 40 + (Math.random() - .5) * 30, life: 0.55, col });
+  // aura
+  cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = m.held ? 0.9 : 0.55;
+  const gr = s * (m.held ? 5 : 4); cx.drawImage(glow(col, 128), x - gr / 2, y - gr / 2, gr, gr);
+  cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = m.stun > 0 && Math.floor(now / 70) % 2 ? 0.4 : 1;
+  // carried sparks orbit the moth
+  const shown = Math.min(m.carry, 14);
+  for (let k = 0; k < shown; k++) {
+    const a = now / 500 + k * 6.283 / shown, rr = s * (1.9 + 0.25 * Math.sin(now / 300 + k));
+    cx.fillStyle = '#fff3c4'; cx.beginPath(); cx.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr, 2.2, 0, 6.283); cx.fill();
+  }
+  cx.save(); cx.translate(x, y); cx.rotate(m.a);
+  const flap = Math.sin(m.flap) * (m.held ? 0.55 : 0.3);
+  for (const side of [-1, 1]) {
+    cx.save(); cx.rotate(side * (0.9 + flap));
+    cx.fillStyle = col; cx.globalAlpha *= 0.92;
+    cx.beginPath(); cx.ellipse(-s * 0.15, side * s * 0.0, s * 1.15, s * 0.62, 0, 0, 6.283); cx.fill();
+    cx.fillStyle = 'rgba(10,8,18,.35)'; cx.beginPath(); cx.ellipse(-s * 0.3, 0, s * 0.35, s * 0.2, 0, 0, 6.283); cx.fill();
+    cx.restore();
+    cx.save(); cx.rotate(side * (2.2 - flap * 0.6));
+    cx.fillStyle = col; cx.beginPath(); cx.ellipse(s * 0.1, 0, s * 0.7, s * 0.42, 0, 0, 6.283); cx.fill();
+    cx.restore();
+  }
+  cx.fillStyle = '#1a1424'; cx.beginPath(); cx.ellipse(0, 0, s * 0.62, s * 0.24, 0, 0, 6.283); cx.fill();
+  cx.strokeStyle = '#1a1424'; cx.lineWidth = 1.5; // antennae
+  for (const side of [-1, 1]) { cx.beginPath(); cx.moveTo(s * 0.5, side * s * 0.08); cx.quadraticCurveTo(s * 1.0, side * s * 0.15, s * 1.15, side * s * 0.45); cx.stroke(); }
+  cx.restore();
+  cx.globalAlpha = 1;
+  // label
+  cx.textAlign = 'center'; cx.font = "700 12px 'Space Mono', monospace"; cx.fillStyle = col;
+  cx.fillText((leading ? '♛ ' : '') + m.carry, x, y - s * 2.6);
+}
+function hud(now) {
+  const pad = 16, top = W < 620;
+  for (let i = 0; i < 4; i++) {
+    const right = i % 2 === 1, bottom = i >= 2;
+    const x = right ? W - pad : pad, y = bottom ? H - pad - 36 : pad + 4;
+    cx.textAlign = right ? 'right' : 'left';
+    cx.fillStyle = COLORS[i]; cx.font = "800 20px 'Bricolage Grotesque', sans-serif";
+    const m = game.moths[i];
+    cx.fillText(`${NAMES[i]} ${m.carry}`, x, y + 18);
+    cx.font = "11px 'Space Mono', monospace"; cx.fillStyle = 'rgba(251,243,228,.6)';
+    const pips = '●'.repeat(game.wins[i]) + '○'.repeat(Math.max(0, C.WIN_ROUNDS - game.wins[i]));
+    cx.fillText(`${pips}  ${game.humans[i] ? (matchMedia('(pointer: coarse)').matches ? 'hold this corner' : 'key ' + KEYS[i]) : 'cpu'}`, x, y + 34);
+  }
+  // timer + round
+  cx.textAlign = 'center';
+  if (game.state === 'play' || game.state === 'roundover') {
+    const left = Math.max(0, C.ROUND_T - game.t);
+    cx.font = "800 26px 'Bricolage Grotesque', sans-serif"; cx.fillStyle = left < 10 ? '#ff9d5c' : '#fbf3e4';
+    cx.fillText(Math.ceil(left), CX, top ? H - 64 : 34);
+    cx.font = "11px 'Space Mono', monospace"; cx.fillStyle = 'rgba(251,243,228,.5)';
+    cx.fillText('round ' + game.round, CX, top ? H - 48 : 50);
+  }
+  if (game.state === 'countdown') {
+    const n = Math.ceil(game.countdown), k = game.countdown % 1;
+    cx.font = `800 ${Math.round(80 + 40 * k)}px 'Bricolage Grotesque', sans-serif`; cx.fillStyle = `rgba(251,243,228,${0.4 + 0.6 * k})`;
+    cx.fillText(n, CX, CY - SC * 0.35);
+    cx.font = "13px 'Space Mono', monospace"; cx.fillStyle = 'rgba(251,243,228,.75)';
+    cx.fillText(game.round === 1 ? 'hold to fly · let go to spin' : 'round ' + game.round, CX, CY + SC * 0.5);
+  }
+  if (game.lamp.phase === 'warn') {
+    cx.font = "800 18px 'Bricolage Grotesque', sans-serif"; cx.fillStyle = '#ff9d5c';
+    cx.fillText('the lamp flickers… get out!', CX, CY - C.FLARE_R * SC - 16);
+  }
+  if (banner) {
+    const k = Math.min(1, (now - banner.t) / 300);
+    cx.font = `800 ${Math.round(Math.min(54, W / 12) * (0.8 + 0.2 * k))}px 'Bricolage Grotesque', sans-serif`;
+    cx.fillStyle = banner.col; cx.globalAlpha = k; cx.shadowColor = '#0a0812'; cx.shadowBlur = 18;
+    cx.fillText(banner.text, CX, CY - SC * 0.45); cx.shadowBlur = 0; cx.globalAlpha = 1;
+  }
+}
+
+// ?demo=1&record=http://localhost:PORT/x.webm : all-CPU match + canvas/audio capture PUT to a local server (trailers)
+function startRecording(url) {
+  if (!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url)) return;
+  const dest = ac.createMediaStreamDestination(); masterOut.connect(dest);
+  const stream = new MediaStream([...cv.captureStream(60).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  const mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m));
+  recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8e6 });
+  const chunks = []; recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = async () => { const blob = new Blob(chunks, { type: 'video/webm' });
+    try { const r = await fetch(url, { method: 'PUT', body: blob }); window.__recorded = r.status + ' ' + blob.size; } catch (e) { window.__recorded = 'error ' + e; } };
+  recorder.start(1000);
+}
+
+renderSeats();
+startAttract();
+requestAnimationFrame(frame);
+if (params.has('demo')) { if (params.get('round')) C.ROUND_T = +params.get('round'); setTimeout(startMatch, 300); }
+</script>
+</body>
+</html>
