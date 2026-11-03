@@ -144,7 +144,7 @@ const SMP_NAMES = ['kick', 'tamb', 'claves', 'flap', 'bump', 'wall', 'flare', 'b
 for (const k in INST) for (const [n] of INST[k]) SMP_NAMES.push(k + '_' + n);
 // prefetch the raw bytes at page load (no AudioContext/gesture needed); decode on the first gesture
 const RAW = {};
-for (const n of SMP_NAMES) RAW[n] = fetch('audio/' + n + '.mp3').then(r => r.arrayBuffer());
+for (const n of SMP_NAMES) { RAW[n] = fetch('audio/' + n + '.mp3').then(r => r.arrayBuffer()); RAW[n].catch(() => {}); }
 function loadSamples() {
   if (smpReady) return smpReady;
   smpReady = Promise.all(SMP_NAMES.map(n => RAW[n]
